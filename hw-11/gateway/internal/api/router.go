@@ -1,0 +1,37 @@
+package api
+
+import (
+	"io"
+	"net/http"
+	"time"
+
+	"hw-11/ledger"
+)
+
+const apiPrefix = "/api"
+
+func NewRouter(service ledger.Service, timeout time.Duration) http.Handler {
+	h := handlers{service: service}
+	api := http.NewServeMux()
+	api.HandleFunc("GET /transactions", h.listTransactions)
+	api.HandleFunc("POST /transactions", h.createTransaction)
+	api.HandleFunc("POST /transactions/bulk", h.importTransactions)
+	api.HandleFunc("/transactions/bulk", methodNotAllowed("POST"))
+	api.HandleFunc("/transactions", methodNotAllowed("GET, POST"))
+	api.HandleFunc("GET /budgets", h.listBudgets)
+	api.HandleFunc("POST /budgets", h.createBudget)
+	api.HandleFunc("/budgets", methodNotAllowed("GET, POST"))
+	api.HandleFunc("GET /reports/summary", h.getReportSummary)
+	api.HandleFunc("/reports/summary", methodNotAllowed("GET"))
+	api.HandleFunc("/", notFound)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, "pong")
+	})
+	mux.Handle(apiPrefix+"/", http.StripPrefix(apiPrefix, api))
+	mux.HandleFunc("/", notFound)
+
+	return Logging(JSONContentType(RequestTimeout(timeout, mux)))
+}
